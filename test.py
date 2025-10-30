@@ -73,7 +73,7 @@ def evaluate(dspth, respth, ckpt_name):
     net = BiSeNet(n_classes=n_classes).to(device).eval()
 
     # NOTE: 关键修复：map_location=device
-    ckpt_path = ckpt_name if osp.isabs(ckpt_name) else osp.join('res/cp', ckpt_name)
+    ckpt_path = ckpt_name
     assert osp.exists(ckpt_path), f"ckpt not found: {ckpt_path}"
     net.load_state_dict(torch.load(ckpt_path, map_location=device))
 
@@ -83,21 +83,23 @@ def evaluate(dspth, respth, ckpt_name):
     ])
 
     exts = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
-    names = [n for n in os.listdir(dspth) if osp.splitext(n.lower())[1] in exts]
-    names.sort()
-    for name in names:
-        pil = Image.open(osp.join(dspth, name)).convert('RGB')
-        im_rgb = np.array(pil.resize((512, 512), Image.BILINEAR))
-        x = to_tensor(Image.fromarray(im_rgb)).unsqueeze(0).to(device)
 
-        with torch.no_grad():
-            out = net(x)[0]
-            parsing = out.squeeze(0).detach().cpu().numpy().argmax(0).astype(np.uint8)
+    name = dspth    
 
-        has_mouth, has_nose = has_parts(parsing)
-        print(f"{name}: has_mouth={has_mouth}, has_nose={has_nose}, uniq={np.unique(parsing)}")
+    pil = Image.open(osp.join(dspth, name)).convert('RGB')
+    im_rgb = np.array(pil.resize((512, 512), Image.BILINEAR))
+    x = to_tensor(Image.fromarray(im_rgb)).unsqueeze(0).to(device)
 
-        vis_parsing_on_image(im_rgb, parsing, save_path=osp.join(respth, name))
+    with torch.no_grad():
+        out = net(x)[0]
+        parsing = out.squeeze(0).detach().cpu().numpy().argmax(0).astype(np.uint8)
+
+    has_mouth, has_nose = has_parts(parsing)
+    # print(f"{name}: has_mouth={has_mouth}, has_nose={has_nose}, uniq={np.unique(parsing)}")
+
+    # vis_parsing_on_image(im_rgb, parsing, save_path=osp.join(respth, name))
+    return has_mouth
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -106,4 +108,6 @@ if __name__ == "__main__":
     parser.add_argument('--ckpt', default='79999_iter.pth', help='checkpoint file (abs path or res/cp/xxx.pth)')
     args = parser.parse_args()
 
-    evaluate(dspth=args.dspth, respth=args.respth, ckpt_name=args.ckpt)
+    has_mouth = evaluate(dspth=args.dspth, respth=args.respth, ckpt_name=args.ckpt)
+    mouth = ": 有嘴巴" if has_mouth else ": 没有嘴巴"
+    print(f"该人脸 {mouth}")
